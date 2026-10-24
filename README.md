@@ -1,6 +1,10 @@
 # ZoomRecorder
 
-到点自动加入 Zoom 会议、全屏、打开字幕，并用 EV 录屏录下来；会议结束后自动停止。
+到点自动加入 Zoom 会议、全屏、打开字幕，并用 EV 录屏录下来；会议结束后自动停止。适合跨时区听讲座、开会，不用熬夜守着。
+
+**测试环境：** Windows 11、Windows PowerShell 5.1、Zoom Workplace、EV 录屏 5.2。本机时区为珀斯（UTC+8）。其他环境下没有测试过，从头到尾的完整演练也还没做。
+
+**路径是写死的：** 项目目录 `D:\ClaudeCodeProjects\ZoomRecorder`，EV 安装在 `C:\Program Files (x86)\EVCapture`，录像保存到 `D:\EV录屏文件`。路径不同时，请修改 `lib\EV.ps1` 顶部的常量，以及下文命令里的路径。
 
 ## 安装
 
