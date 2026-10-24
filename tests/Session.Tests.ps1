@@ -34,7 +34,7 @@ Describe 'Invoke-RecordingSession' {
     Mock Set-ZoomFullScreen { [void]$global:Zr.Calls.Add('Set-ZoomFullScreen'); $global:Zr.FullScreen } -ModuleName RecorderCore
     Mock Start-EVRecording { [void]$global:Zr.Calls.Add('Start-EVRecording') } -ModuleName RecorderCore
     Mock Stop-EVRecording { [void]$global:Zr.Calls.Add('Stop-EVRecording') } -ModuleName RecorderCore
-    Mock Watch-Recording { $global:Zr.Watch } -ModuleName RecorderCore
+    Mock Watch-Recording { if ($global:Zr.Watch -eq 'THROW') { throw 'boom' }; $global:Zr.Watch } -ModuleName RecorderCore
     Mock Close-Zoom {} -ModuleName RecorderCore
     Mock Close-EV {} -ModuleName RecorderCore
     Mock Find-EVRecording { 'D:\v.mp4' } -ModuleName RecorderCore
@@ -120,6 +120,14 @@ Describe 'Invoke-RecordingSession' {
         Reset-Zr @{ Clock = [datetime]'2026-10-29 04:20' }
         Invoke-RecordingSession -Id $global:Zr.Meeting.id -Unattended | Should Be 'failed'
         Get-ZrCalls 'Start-EV' | Should Be ''
+    }
+    It '录制中程序出错 → 仍停止 EV 并关闭 Zoom/EV，状态 failed' {
+        Reset-Zr @{ Watch = 'THROW' }
+        Mock Close-EV { [void]$global:Zr.Calls.Add('Close-EV') } -ModuleName RecorderCore
+        Mock Close-Zoom { [void]$global:Zr.Calls.Add('Close-Zoom') } -ModuleName RecorderCore
+        Invoke-RecordingSession -Id $global:Zr.Meeting.id | Should Be 'failed'
+        Get-ZrCalls 'Start-EVRecording', 'Stop-EVRecording', 'Close-Zoom', 'Close-EV' | Should Be 'Start-EVRecording,Stop-EVRecording,Close-Zoom,Close-EV'
+        ($global:Zr.Notices -join '|') | Should Match '录制出错'
     }
     It '任何路径都会调用 Disable-KeepAwake' {
         foreach ($o in @(@{}, @{ Dialog = 'Cancel' }, @{ Locked = $true }, @{ Join = 'PasswordError' })) {

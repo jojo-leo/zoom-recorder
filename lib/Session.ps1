@@ -121,6 +121,7 @@ function Invoke-RecordingSession {
     if (-not $mutex.WaitOne(0)) { $mutex.Dispose(); return 'AlreadyRunning' }
 
     $result = 'failed'
+    $recording = $false
     $log = $null
     $meeting = $null
     try { do {
@@ -199,6 +200,7 @@ function Invoke-RecordingSession {
         if (Set-ZoomFullScreen) { Write-SessionLog $log '进入全屏模式' } else { Write-SessionLog $log '警告：未能确认全屏' }
 
         Start-EVRecording
+        $recording = $true
         $startedAt = Get-Now
         Set-MeetingStatus $meeting.id 'recording'
         Set-SessionState -Id $meeting.id -Name $meeting.name -Phase Recording -StartedAt $startedAt
@@ -207,6 +209,7 @@ function Invoke-RecordingSession {
         $reason = Watch-Recording -StartedAt $startedAt -MaxMinutes $meeting.maxDuration
         $end = $script:EndReasons[$reason]
         Write-SessionLog $log $end.Text
+        $recording = $false
         if ($reason -ne 'EVCrashed') {
             Stop-EVRecording
             Write-SessionLog $log '停止 EV 录制'
@@ -227,8 +230,15 @@ function Invoke-RecordingSession {
         }
         $result = $end.Status
     } while ($false) } catch {
-        if ($log) { Write-SessionLog $log "错误: $($_.Exception.Message)" }
-        if ($meeting) { Set-MeetingStatus $meeting.id 'failed'; Add-PendingNotice "$($meeting.name)：录制出错 - $($_.Exception.Message)" }
+        $err = $_.Exception.Message
+        # Never leave EV recording unattended until the disk fills up.
+        if ($recording) {
+            try { Stop-EVRecording; Wait-Seconds 3 } catch {}
+            try { Close-Zoom } catch {}
+            try { Close-EV } catch {}
+        }
+        if ($log) { Write-SessionLog $log "错误: $err" }
+        if ($meeting) { Set-MeetingStatus $meeting.id 'failed'; Add-PendingNotice "$($meeting.name)：录制出错 - $err" }
         $result = 'failed'
     } finally {
         if ($result -ne 'Skipped') {
