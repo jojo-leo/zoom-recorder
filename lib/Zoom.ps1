@@ -59,13 +59,16 @@ function Test-ZoomFullScreen {
 }
 
 function Set-ZoomFullScreen {
-    $w = Get-ZoomMeetingWindow
-    if (-not $w) { return $false }
-    if (Test-ZoomFullScreen) { return $true }   # Alt+F toggles, so never press it when already full screen
-    Set-ForegroundWindowSafe $w.Handle
-    Start-Sleep -Milliseconds 500
-    Send-KeyChord @('Menu', 'F')
-    Start-Sleep -Seconds 2
+    # Alt+F toggles, so check before every press. Focus can take a moment to land, hence the retries.
+    for ($attempt = 0; $attempt -lt 3; $attempt++) {
+        $w = Get-ZoomMeetingWindow
+        if (-not $w) { return $false }
+        if (Test-ZoomFullScreen) { return $true }
+        Set-ForegroundWindowSafe $w.Handle
+        Start-Sleep -Milliseconds 800
+        Send-KeyChord @('Menu', 'F')
+        for ($i = 0; $i -lt 8 -and -not (Test-ZoomFullScreen); $i++) { Start-Sleep -Milliseconds 500 }
+    }
     Test-ZoomFullScreen
 }
 
