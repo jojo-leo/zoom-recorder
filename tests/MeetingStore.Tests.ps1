@@ -15,6 +15,15 @@ Describe 'MeetingStore' {
     It '同 id 替换而不是追加' { Save-Meeting $m -Path $p; @(Get-Meetings -Path $p).Count | Should Be 1 }
     It '改状态' { Set-MeetingStatus $m.id 'completed' -Path $p; (Get-Meeting $m.id -Path $p).status | Should Be 'completed' }
     It '删除' { Remove-Meeting $m.id -Path $p; @(Get-Meetings -Path $p).Count | Should Be 0 }
+    It '文件仅当前用户和 SYSTEM 可访问（含密码）' {
+        Save-Meeting $m -Path $p
+        $acl = Get-Acl -LiteralPath $p
+        $acl.AreAccessRulesProtected | Should Be $true
+        $who = @($acl.Access | ForEach-Object { $_.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value } | Sort-Object -Unique)
+        $me = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+        ($who | Where-Object { $_ -ne $me -and $_ -ne 'S-1-5-18' }).Count | Should Be 0
+        Remove-Meeting $m.id -Path $p
+    }
     It '损坏文件报错而不覆盖' {
         Set-Content $p '{oops'
         { Get-Meetings -Path $p } | Should Throw

@@ -77,7 +77,20 @@ function Write-MeetingsFile {
     $json = ConvertTo-Json -InputObject ([pscustomobject]@{ meetings = @($Meetings) }) -Depth 5
     $tmp = "$Path.tmp"
     [IO.File]::WriteAllText($tmp, $json, (New-Object Text.UTF8Encoding $false))
+    Protect-UserOnlyFile $tmp
     Move-Item -LiteralPath $tmp -Destination $Path -Force
+}
+
+# The file holds meeting passwords: current user + SYSTEM only, no inherited entries.
+# Applied to the temp file on every write because the atomic move replaces the target's ACL.
+function Protect-UserOnlyFile {
+    param([Parameter(Mandatory, Position = 0)][string]$Path)
+    $acl = New-Object System.Security.AccessControl.FileSecurity
+    $acl.SetAccessRuleProtection($true, $false)
+    foreach ($sid in [Security.Principal.WindowsIdentity]::GetCurrent().User, (New-Object Security.Principal.SecurityIdentifier 'S-1-5-18')) {
+        $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($sid, 'FullControl', 'Allow')))
+    }
+    Set-Acl -LiteralPath $Path -AclObject $acl
 }
 
 function Save-Meeting {

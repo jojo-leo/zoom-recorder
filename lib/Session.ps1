@@ -38,7 +38,10 @@ function Get-SessionState {
 
 function Request-SessionStop { Set-Content -LiteralPath (Get-StatePath 'stop.request') -Value (Get-Date -Format s) }
 function Test-StopRequested { Test-Path -LiteralPath (Get-StatePath 'stop.request') }
-function Clear-StopRequest { Remove-Item -LiteralPath (Get-StatePath 'stop.request') -ErrorAction SilentlyContinue }
+function Clear-StopRequest {
+    $path = Get-StatePath 'stop.request'
+    if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path }
+}
 
 function Get-PendingNotices {
     param([switch]$Clear)
@@ -48,7 +51,7 @@ function Get-PendingNotices {
         # PS 5.1 ConvertFrom-Json emits a JSON array as one object; ForEach-Object unrolls it.
         try { $items = @(Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json | ForEach-Object { $_ }) } catch { $items = @() }
     }
-    if ($Clear) { Remove-Item -LiteralPath $path -ErrorAction SilentlyContinue }
+    if ($Clear -and (Test-Path -LiteralPath $path)) { Remove-Item -LiteralPath $path }
     $items
 }
 
