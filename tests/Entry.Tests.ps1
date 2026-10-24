@@ -56,6 +56,18 @@ Describe 'Install-ZoomRecorder' {
     }
 }
 
+Describe 'Test-TrayShouldExit（随录制启动的托盘）' {
+    $now = [datetime]'2026-10-29 05:00:00'
+    It '录制中不退出' { Test-TrayShouldExit -Phase Recording -NoticeCount 0 -IdleSince $null -Now $now | Should Be $false }
+    It '有未显示的失败提醒不退出' { Test-TrayShouldExit -Phase Idle -NoticeCount 1 -IdleSince $now.AddMinutes(-5) -Now $now | Should Be $false }
+    It '刚变空闲不退出（给会话写状态留时间）' { Test-TrayShouldExit -Phase Idle -NoticeCount 0 -IdleSince $now.AddSeconds(-5) -Now $now | Should Be $false }
+    It '空闲超过 15 秒且无提醒 → 退出' { Test-TrayShouldExit -Phase Idle -NoticeCount 0 -IdleSince $now.AddSeconds(-16) -Now $now | Should Be $true }
+}
+
+Describe 'Get-TrayLaunchArguments' {
+    It '自动退出模式' { Get-TrayLaunchArguments | Should Match '-Action Tray -AutoExit$' }
+}
+
 Describe 'Format-TrayTooltip' {
     It '空闲' { Format-TrayTooltip ([pscustomobject]@{ Phase = 'Idle' }) | Should Be 'ZoomRecorder · 空闲' }
     It '值守' { Format-TrayTooltip ([pscustomobject]@{ Phase = 'Guarding'; Name = 'S' }) | Should Be 'ZoomRecorder · 值守中 · S' }

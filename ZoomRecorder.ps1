@@ -8,13 +8,15 @@
 param(
     [ValidateSet('Tray', 'UI', 'Notify12h', 'Session', 'Install', 'Uninstall')][string]$Action = 'Tray',
     [string]$Id,
-    [switch]$Unattended
+    [switch]$Unattended,
+    [switch]$AutoExit
 )
 
 if ([Threading.Thread]::CurrentThread.ApartmentState -ne 'STA') {
     $argList = "-NoProfile -WindowStyle Hidden -STA -File `"$PSCommandPath`" -Action $Action"
     if ($Id) { $argList += " -Id $Id" }
     if ($Unattended) { $argList += ' -Unattended' }
+    if ($AutoExit) { $argList += ' -AutoExit' }
     Start-Process powershell.exe -ArgumentList $argList
     return
 }
@@ -22,7 +24,7 @@ if ([Threading.Thread]::CurrentThread.ApartmentState -ne 'STA') {
 Import-Module (Join-Path $PSScriptRoot 'RecorderCore.psm1') -Force
 
 switch ($Action) {
-    'Tray' { Start-Tray }
+    'Tray' { Start-Tray -AutoExit:$AutoExit }
     'UI' { & (Join-Path $PSScriptRoot 'RecorderUI.ps1') }
     'Notify12h' { Invoke-Notify12h $Id }
     'Session' { [void](Invoke-RecordingSession -Id $Id -Unattended:$Unattended) }

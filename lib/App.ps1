@@ -32,6 +32,27 @@ function Uninstall-ZoomRecorder {
     Unregister-AllRecorderTasks
 }
 
+# --- tray started on demand by a recording session (no autostart needed) ---
+$script:TrayMutexName = 'Global\ZoomRecorder_Tray'
+$script:TrayIdleGraceSeconds = 15
+
+function Get-TrayLaunchArguments {
+    '-NoProfile -WindowStyle Hidden -STA -File "{0}" -Action Tray -AutoExit' -f (Get-EntryScriptPath)
+}
+
+function Start-TrayIfNeeded {
+    $existing = $null
+    if ([System.Threading.Mutex]::TryOpenExisting($script:TrayMutexName, [ref]$existing)) { $existing.Dispose(); return }
+    Start-Process powershell.exe -ArgumentList (Get-TrayLaunchArguments) | Out-Null
+}
+
+function Test-TrayShouldExit {
+    # An on-demand tray stays while a session runs or a failure notice is unread, then leaves.
+    param([string]$Phase, [int]$NoticeCount, $IdleSince, [datetime]$Now = (Get-Date))
+    if ($Phase -ne 'Idle' -or $NoticeCount -gt 0 -or -not $IdleSince) { return $false }
+    ($Now - [datetime]$IdleSince).TotalSeconds -ge $script:TrayIdleGraceSeconds
+}
+
 function Format-TrayTooltip {
     param([Parameter(Mandatory, Position = 0)]$State, [datetime]$Now = (Get-Date))
     $text = switch ($State.Phase) {

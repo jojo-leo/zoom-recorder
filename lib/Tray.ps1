@@ -15,8 +15,10 @@ function New-DotIcon {
 }
 
 function Start-Tray {
+    # -AutoExit: started by a recording session; leaves once idle and every failure notice has been shown.
+    param([switch]$AutoExit)
     Add-Type -AssemblyName System.Windows.Forms, System.Drawing
-    $mutex = New-Object System.Threading.Mutex($false, 'Global\ZoomRecorder_Tray')
+    $mutex = New-Object System.Threading.Mutex($false, $script:TrayMutexName)
     if (-not $mutex.WaitOne(0)) { return }   # already running
 
     $ctx = @{
@@ -24,6 +26,8 @@ function Start-Tray {
         Tray     = New-Object System.Windows.Forms.NotifyIcon
         Blink    = $false
         Showing  = $false
+        AutoExit = [bool]$AutoExit
+        IdleSince = $null
         Entry    = Get-EntryScriptPath
         LogDir   = Get-DefaultLogDir
     }
@@ -85,6 +89,14 @@ function Start-Tray {
                     $ctx.Showing = $true
                     [void][System.Windows.Forms.MessageBox]::Show(($notices -join "`n`n"), 'ZoomRecorder 录制提醒', 'OK', 'Warning')
                     $ctx.Showing = $false
+                }
+            }
+            if ($ctx.AutoExit -and -not $ctx.Showing) {
+                if ($s.Phase -ne 'Idle') { $ctx.IdleSince = $null }
+                elseif (-not $ctx.IdleSince) { $ctx.IdleSince = Get-Date }
+                if (Test-TrayShouldExit -Phase $s.Phase -NoticeCount @(Get-PendingNotices).Count -IdleSince $ctx.IdleSince) {
+                    $ctx.Timer.Stop(); $ctx.Tray.Visible = $false; $ctx.Tray.Dispose()
+                    [System.Windows.Forms.Application]::ExitThread()
                 }
             }
         })

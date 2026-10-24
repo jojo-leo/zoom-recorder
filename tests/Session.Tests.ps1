@@ -42,6 +42,19 @@ Describe 'Invoke-RecordingSession' {
     Mock Save-Screenshot { [void]$global:Zr.Calls.Add('Save-Screenshot') } -ModuleName RecorderCore
     Mock Add-PendingNotice { [void]$global:Zr.Notices.Add($Message) } -ModuleName RecorderCore
     Mock Get-StateDir { 'TestDrive:\state' } -ModuleName RecorderCore
+    Mock Start-TrayIfNeeded { [void]$global:Zr.Calls.Add('Start-TrayIfNeeded') } -ModuleName RecorderCore
+
+    It '值守开始时拉起托盘（不开机自启也能看到状态）' {
+        Reset-Zr
+        Invoke-RecordingSession -Id $global:Zr.Meeting.id | Out-Null
+        Get-ZrCalls 'Start-TrayIfNeeded', 'Dialog' | Should Be 'Start-TrayIfNeeded,Dialog'
+    }
+    It '跳过的会议不拉起托盘' {
+        Reset-Zr
+        $global:Zr.Meeting.status = 'completed'
+        Invoke-RecordingSession -Id $global:Zr.Meeting.id | Out-Null
+        Get-ZrCalls 'Start-TrayIfNeeded' | Should Be ''
+    }
 
     It '正常流程 → completed，顺序为 EV 启动→入会→全屏→字幕→开始录制' {
         Reset-Zr

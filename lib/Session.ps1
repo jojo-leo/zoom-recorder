@@ -141,6 +141,7 @@ function Invoke-RecordingSession {
         Enable-KeepAwake
         Set-MeetingStatus $meeting.id 'guarding'
         Set-SessionState -Id $meeting.id -Name $meeting.name -Phase Guarding
+        try { Start-TrayIfNeeded } catch { Write-SessionLog $log "警告：托盘图标启动失败（不影响录制）: $($_.Exception.Message)" }
         Write-SessionLog $log '进入值守模式（已阻止睡眠和熄屏）'
 
         if (-not $Unattended) {
