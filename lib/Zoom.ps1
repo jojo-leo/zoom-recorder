@@ -1,8 +1,8 @@
-﻿# Zoom desktop client control: join via zoommtg://, classify windows, full screen, computer audio, captions.
+﻿# Zoom desktop client control: join via zoommtg://, classify windows, full screen.
+# Captions, computer audio and skipping the join preview come from Zoom's own settings (see README):
+# Zoom exposes no toolbar buttons to UI Automation, so they cannot be clicked from here.
 # Window classes / titles below were chosen from known Zoom builds; calibrate against the real client
 # (Get-TopWindows -ProcessName Zoom) if detection misbehaves after a Zoom update.
-
-Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 
 $script:ZoomProcessName = 'Zoom'
 $script:ZoomClasses = @{ Meeting = @('ConfMultiTabContentWndClass') }
@@ -10,12 +10,6 @@ $script:ZoomTitles = @{
     Meeting       = '^Zoom (Meeting|Webinar|会议|网络研讨会)'
     PasswordError = 'incorrect|wrong|invalid|错误|密码'
     Waiting       = 'waiting|等候|等待主持人'
-}
-$script:ZoomButtons = @{
-    ComputerAudio = '^(Join with Computer Audio|Join Audio by Computer|使用电脑音频加入|使用电脑语音设备)'
-    Captions      = '^(Show Captions|Captions|CC|Closed Caption|显示字幕|字幕)'
-    CaptionsMenu  = '^(Show Captions|Show Subtitle|显示字幕)'
-    CaptionsOn    = '^(Hide Captions|Hide Subtitle|隐藏字幕)'
 }
 
 function Get-ZoomJoinUrl {
@@ -70,59 +64,4 @@ function Set-ZoomFullScreen {
         for ($i = 0; $i -lt 8 -and -not (Test-ZoomFullScreen); $i++) { Start-Sleep -Milliseconds 500 }
     }
     Test-ZoomFullScreen
-}
-
-# --- UI Automation helpers -------------------------------------------------
-
-function Find-ZoomUiElement {
-    param([Parameter(Mandatory)][string]$NamePattern, [IntPtr[]]$Handles = @(Get-ZoomWindows | Where-Object Visible | ForEach-Object Handle))
-    $ae = [System.Windows.Automation.AutomationElement]
-    foreach ($h in $Handles) {
-        try { $root = $ae::FromHandle($h) } catch { continue }
-        $all = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)
-        foreach ($el in $all) {
-            $name = $el.Current.Name
-            if ($name -and $name -match $NamePattern) { return $el }
-        }
-    }
-    $null
-}
-
-function Invoke-UiElement {
-    param([Parameter(Mandatory)]$Element)
-    $pattern = $null
-    if ($Element.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$pattern)) { $pattern.Invoke(); return $true }
-    if ($Element.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern, [ref]$pattern)) { $pattern.Toggle(); return $true }
-    $false
-}
-
-function Confirm-ZoomComputerAudio {
-    $button = Find-ZoomUiElement -NamePattern $script:ZoomButtons.ComputerAudio
-    if ($button) { [void](Invoke-UiElement $button); return $true }
-    $false
-}
-
-function Test-ZoomCaptionsOn { [bool](Find-ZoomUiElement -NamePattern $script:ZoomButtons.CaptionsOn) }
-
-function Enable-ZoomCaptions {
-    if (Test-ZoomCaptionsOn) { return $true }
-    $w = Get-ZoomMeetingWindow
-    if (-not $w) { return $false }
-
-    # 1. keyboard shortcut
-    Set-ForegroundWindowSafe $w.Handle
-    Send-KeyChord @('ControlKey', 'ShiftKey', 'C')
-    Start-Sleep -Seconds 2
-    if (Test-ZoomCaptionsOn) { return $true }
-
-    # 2. toolbar button, then the "Show Captions" item of the menu it may open
-    $button = Find-ZoomUiElement -NamePattern $script:ZoomButtons.Captions -Handles @($w.Handle)
-    if ($button -and (Invoke-UiElement $button)) {
-        Start-Sleep -Seconds 1
-        $item = Find-ZoomUiElement -NamePattern $script:ZoomButtons.CaptionsMenu
-        if ($item) { [void](Invoke-UiElement $item) }
-        Start-Sleep -Seconds 1
-        if (Test-ZoomCaptionsOn) { return $true }
-    }
-    $false
 }

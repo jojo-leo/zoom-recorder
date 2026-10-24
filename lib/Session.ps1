@@ -196,9 +196,7 @@ function Invoke-RecordingSession {
         Write-SessionLog $log 'Zoom 会议窗口已出现'
 
         Wait-Seconds 5
-        if (Confirm-ZoomComputerAudio) { Write-SessionLog $log '已选择使用电脑音频' }
         if (Set-ZoomFullScreen) { Write-SessionLog $log '进入全屏模式' } else { Write-SessionLog $log '警告：未能确认全屏' }
-        if (Enable-ZoomCaptions) { Write-SessionLog $log '字幕已打开' } else { Write-SessionLog $log '字幕未打开（可能主持人未启用）' }
 
         Start-EVRecording
         $startedAt = Get-Now

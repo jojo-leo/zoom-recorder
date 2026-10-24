@@ -6,14 +6,14 @@ function Reset-Zr([hashtable]$Overrides = @{}) {
     $global:Zr = @{
         Meeting = $m; Clock = [datetime]'2026-10-29 03:00'; Calls = New-Object System.Collections.ArrayList
         Logs = New-Object System.Collections.ArrayList; Notices = New-Object System.Collections.ArrayList
-        Dialog = 'Confirm'; Locked = $false; EvStarts = $true; Join = 'Meeting'; Captions = $true; Watch = 'MeetingEnded'
+        Dialog = 'Confirm'; Locked = $false; EvStarts = $true; Join = 'Meeting'; FullScreen = $true; Watch = 'MeetingEnded'
         Statuses = New-Object System.Collections.ArrayList
     }
     foreach ($k in $Overrides.Keys) { $global:Zr[$k] = $Overrides[$k] }
 }
 function Get-ZrCalls([string[]]$Names) { ($global:Zr.Calls | Where-Object { $Names -contains $_ }) -join ',' }
 
-$track = 'Start-EV', 'Start-ZoomJoin', 'Confirm-ZoomComputerAudio', 'Set-ZoomFullScreen', 'Enable-ZoomCaptions', 'Start-EVRecording', 'Stop-EVRecording'
+$track = 'Start-EV', 'Start-ZoomJoin', 'Set-ZoomFullScreen', 'Start-EVRecording', 'Stop-EVRecording'
 
 Describe 'Invoke-RecordingSession' {
     Mock Get-Now { $global:Zr.Clock } -ModuleName RecorderCore
@@ -31,9 +31,7 @@ Describe 'Invoke-RecordingSession' {
     Mock Start-EV { [void]$global:Zr.Calls.Add('Start-EV'); $global:Zr.EvStarts } -ModuleName RecorderCore
     Mock Start-ZoomJoin { [void]$global:Zr.Calls.Add('Start-ZoomJoin'); $global:Zr.JoinedAt = $global:Zr.Clock } -ModuleName RecorderCore
     Mock Wait-ForZoomMeeting { $global:Zr.Join } -ModuleName RecorderCore
-    Mock Confirm-ZoomComputerAudio { [void]$global:Zr.Calls.Add('Confirm-ZoomComputerAudio'); $true } -ModuleName RecorderCore
-    Mock Set-ZoomFullScreen { [void]$global:Zr.Calls.Add('Set-ZoomFullScreen'); $true } -ModuleName RecorderCore
-    Mock Enable-ZoomCaptions { [void]$global:Zr.Calls.Add('Enable-ZoomCaptions'); $global:Zr.Captions } -ModuleName RecorderCore
+    Mock Set-ZoomFullScreen { [void]$global:Zr.Calls.Add('Set-ZoomFullScreen'); $global:Zr.FullScreen } -ModuleName RecorderCore
     Mock Start-EVRecording { [void]$global:Zr.Calls.Add('Start-EVRecording') } -ModuleName RecorderCore
     Mock Stop-EVRecording { [void]$global:Zr.Calls.Add('Stop-EVRecording') } -ModuleName RecorderCore
     Mock Watch-Recording { $global:Zr.Watch } -ModuleName RecorderCore
@@ -48,7 +46,7 @@ Describe 'Invoke-RecordingSession' {
     It '正常流程 → completed，顺序为 EV 启动→入会→全屏→字幕→开始录制' {
         Reset-Zr
         Invoke-RecordingSession -Id $global:Zr.Meeting.id | Should Be 'completed'
-        Get-ZrCalls $track | Should Be 'Start-EV,Start-ZoomJoin,Confirm-ZoomComputerAudio,Set-ZoomFullScreen,Enable-ZoomCaptions,Start-EVRecording,Stop-EVRecording'
+        Get-ZrCalls $track | Should Be 'Start-EV,Start-ZoomJoin,Set-ZoomFullScreen,Start-EVRecording,Stop-EVRecording'
         ($global:Zr.Statuses -join ',') | Should Be 'guarding,recording,completed'
     }
     It '等到会议开始才入会' {
@@ -84,11 +82,14 @@ Describe 'Invoke-RecordingSession' {
         Invoke-RecordingSession -Id $global:Zr.Meeting.id | Should Be 'failed'
         ($global:Zr.Logs -join '|') | Should Match 'Zoom 未响应'
     }
-    It '字幕失败仍然录制 → completed，日志含 "字幕未打开"' {
-        Reset-Zr @{ Captions = $false }
+    It '全屏失败仍然录制 → completed，日志含警告' {
+        Reset-Zr @{ FullScreen = $false }
         Invoke-RecordingSession -Id $global:Zr.Meeting.id | Should Be 'completed'
-        ($global:Zr.Logs -join '|') | Should Match '字幕未打开'
+        ($global:Zr.Logs -join '|') | Should Match '未能确认全屏'
         Get-ZrCalls 'Start-EVRecording' | Should Be 'Start-EVRecording'
+    }
+    It '不再尝试点击字幕/音频按钮（Zoom 不暴露按钮，改由 Zoom 设置控制）' {
+        (Get-Command Enable-ZoomCaptions, Confirm-ZoomComputerAudio -ErrorAction SilentlyContinue).Count | Should Be 0
     }
     It '录制中锁屏 → failed + notice "录制中断"' {
         Reset-Zr @{ Watch = 'Locked' }
