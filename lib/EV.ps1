@@ -22,6 +22,19 @@ function Start-EVRecording { Send-KeyChord @('ControlKey', 'F1') }
 
 function Stop-EVRecording { Send-KeyChord @('ControlKey', 'F2') }
 
+# EV writes the mp4 index after Ctrl+F2; killing it before the file stops growing can corrupt the video.
+function Wait-EVFileSettled {
+    param([Parameter(Position = 0)][string]$Path, [int]$TimeoutSeconds = 60)
+    if (-not $Path) { Start-Sleep -Seconds 5; return }
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    $last = -1; $stable = 0
+    while ((Get-Date) -lt $deadline -and $stable -lt 3) {
+        $size = if (Test-Path -LiteralPath $Path) { (Get-Item -LiteralPath $Path).Length } else { -1 }
+        if ($size -eq $last) { $stable++ } else { $stable = 0; $last = $size }
+        Start-Sleep -Seconds 1
+    }
+}
+
 function Close-EV { Stop-Process -Name $script:EvProcessName -Force -ErrorAction SilentlyContinue }
 
 function Find-EVRecording {
